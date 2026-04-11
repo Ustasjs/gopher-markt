@@ -1,25 +1,14 @@
 package settings
 
 import (
-	"errors"
 	"flag"
 	"os"
-	"strings"
 )
 
 var errorMessageServerAddress = "invalid server address. Expected format: host:port"
 
 func validateServerAddress(serverAddress string) error {
-	value := strings.Split(serverAddress, ":")
-	if len(value) != 2 {
-		return errors.New(errorMessageServerAddress)
-	}
-	host := value[0]
-	port := value[1]
-	if host == "" || port == "" {
-		return errors.New(errorMessageServerAddress)
-	}
-	return nil
+	return validateBaseServerAddress(serverAddress, errorMessageServerAddress)
 }
 
 func initServerAddress(settings *Settings) {
