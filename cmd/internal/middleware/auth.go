@@ -2,8 +2,6 @@ package middleware
 
 import (
 	"context"
-	"github.com/ustasjs/gopher-markt/internal/logger"
-	"github.com/ustasjs/gopher-markt/internal/service"
 	"net/http"
 )
 
@@ -38,10 +36,6 @@ func RequireAuth() func(http.Handler) http.Handler {
 			cookie, err := r.Cookie(AuthCookieName)
 			if err == nil && cookie.Value != "" {
 				// TODO implement GetUserID
-				if _, err := service.GetUserID(cookie.Value); err != nil {
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					return
-				}
 			}
 
 			_, ok := GetUserIDFromContext(r.Context())
