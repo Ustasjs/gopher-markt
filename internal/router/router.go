@@ -6,6 +6,8 @@ import (
 	"github.com/ustasjs/gopher-markt/internal/config/settings"
 	"github.com/ustasjs/gopher-markt/internal/logger"
 	customMiddleware "github.com/ustasjs/gopher-markt/internal/middleware"
+	"github.com/ustasjs/gopher-markt/migrations"
+
 	"net/http"
 	"time"
 
@@ -34,11 +36,10 @@ func StartServer() {
 		}
 		defer db.Close()
 
-		// TODO add migrations
-		//migrationsErr := migrations.RunMigrations(db)
-		//if migrationsErr != nil {
-		//	panic(migrationsErr)
-		//}
+		migrationsErr := migrations.RunMigrations(db)
+		if migrationsErr != nil {
+			panic(migrationsErr)
+		}
 	}
 
 	logger.Log.Info("Starting server on:", zap.String("address", string(settingsMap.ServerAddress)))
