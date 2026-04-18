@@ -5,8 +5,10 @@ import (
 	"database/sql"
 
 	"github.com/ustasjs/gopher-markt/internal/config/settings"
+	"github.com/ustasjs/gopher-markt/internal/handler"
 	"github.com/ustasjs/gopher-markt/internal/logger"
 	customMiddleware "github.com/ustasjs/gopher-markt/internal/middleware"
+	"github.com/ustasjs/gopher-markt/internal/service"
 	"github.com/ustasjs/gopher-markt/internal/storage"
 	"github.com/ustasjs/gopher-markt/migrations"
 
@@ -47,11 +49,10 @@ func StartServer() {
 	logger.Log.Info("Starting server on:", zap.String("address", string(settingsMap.ServerAddress)))
 
 	var store = storage.NewPostgresRepository(db)
-	// TODO add storage
 
 	r := chi.NewRouter()
 	initMiddleware(r, store)
-	initRoutes(r, settingsMap, db)
+	initRoutes(r, settingsMap, store)
 
 	srv := &http.Server{
 		Addr:              string(settingsMap.ServerAddress),
@@ -68,8 +69,15 @@ func StartServer() {
 	}
 }
 
-func initRoutes(r *chi.Mux, s *settings.Settings, db *sql.DB) {
-	// TODO add handlers
+func initRoutes(r *chi.Mux, s *settings.Settings, store storage.Repository) {
+	jwtService := service.NewJWTService([]byte(s.JWTSecret))
+	userService := service.NewUserService(store, jwtService)
+
+	userHandler := handler.NewUserHandler(userService)
+
+	// Register routes
+	r.Post("/api/user/register", userHandler.Register)
+	r.Post("/api/user/login", userHandler.Login)
 }
 
 func initMiddleware(r *chi.Mux, store customMiddleware.UserRepository) {

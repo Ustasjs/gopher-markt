@@ -15,6 +15,7 @@ type Settings struct {
 	AccrualSystemAddress AccrualSystemAddress
 	LogLevel             zap.AtomicLevel
 	DatabaseURI          DatabaseURI
+	JWTSecret            JWTSecret
 }
 
 func InitSettings() *Settings {
@@ -24,6 +25,7 @@ func InitSettings() *Settings {
 	initAccrualSystemAddress(settings)
 	initLogLevel(settings)
 	initDatabaseURI(settings)
+	initJWTSecret(settings)
 
 	flag.Parse()
 
