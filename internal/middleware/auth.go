@@ -12,7 +12,7 @@ type contextKey string
 const UserIDContextKey contextKey = "user_id"
 
 type UserRepository interface {
-	CreateUser(ctx context.Context) (string, error)
+	CreateUser(ctx context.Context, login, passwordHash string) (userID string, err error)
 }
 
 func GetUserIDFromContext(ctx context.Context) (string, bool) {

@@ -3,9 +3,11 @@ package router
 import (
 	"compress/gzip"
 	"database/sql"
+
 	"github.com/ustasjs/gopher-markt/internal/config/settings"
 	"github.com/ustasjs/gopher-markt/internal/logger"
 	customMiddleware "github.com/ustasjs/gopher-markt/internal/middleware"
+	"github.com/ustasjs/gopher-markt/internal/storage"
 	"github.com/ustasjs/gopher-markt/migrations"
 
 	"net/http"
@@ -44,6 +46,7 @@ func StartServer() {
 
 	logger.Log.Info("Starting server on:", zap.String("address", string(settingsMap.ServerAddress)))
 
+	var store = storage.NewPostgresRepository(db)
 	// TODO add storage
 
 	r := chi.NewRouter()
