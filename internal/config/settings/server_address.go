@@ -15,7 +15,7 @@ func initServerAddress(settings *Settings) {
 	var serverAddressValue ServerAddress = "localhost:8080"
 	settings.ServerAddress = serverAddressValue
 
-	flag.Func("a", "Input server address", func(flagValue string) error {
+	flag.Func("s", "Input server address", func(flagValue string) error {
 		err := validateServerAddress(flagValue)
 		if err != nil {
 			return err
