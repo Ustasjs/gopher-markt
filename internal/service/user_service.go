@@ -6,9 +6,13 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/ustasjs/gopher-markt/internal/model"
 	"github.com/ustasjs/gopher-markt/internal/storage"
 )
+
+type UserServiceInterface interface {
+	Register(ctx context.Context, login, password string) (token string, err error)
+	Login(ctx context.Context, login, password string) (token string, err error)
+}
 
 type UserService struct {
 	repo       storage.Repository
@@ -58,9 +62,4 @@ func (s *UserService) Login(ctx context.Context, login, password string) (token 
 	}
 
 	return token, nil
-}
-
-func (s *UserService) GetUserByID(ctx context.Context, userID int64) (*model.User, error) {
-	// Placeholder for now
-	return nil, fmt.Errorf("not implemented")
 }
