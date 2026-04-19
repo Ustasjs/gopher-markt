@@ -2,13 +2,25 @@ package settings
 
 import (
 	"flag"
+	"fmt"
+	"net/url"
 	"os"
 )
 
-var errorMessageAccrualSystemAddress = "invalid accrual system address. Expected format: host:port"
+var errorMessageAccrualSystemAddress = "invalid accrual system address. Expected format: host:port or http://host:port"
 
 func validateAccrualSystemAddress(accrualSystemAddress string) error {
-	return validateBaseServerAddress(accrualSystemAddress, errorMessageAccrualSystemAddress)
+	// Try to parse as URL first (supports http://host:port)
+	if parsedURL, err := url.Parse(accrualSystemAddress); err == nil && parsedURL.Host != "" {
+		return nil
+	}
+
+	// Fallback to simple host:port validation
+	err := validateBaseServerAddress(accrualSystemAddress, errorMessageAccrualSystemAddress)
+	if err != nil {
+		return fmt.Errorf("%s, got: %q", errorMessageAccrualSystemAddress, accrualSystemAddress)
+	}
+	return nil
 }
 
 func initAccrualSystemAddress(settings *Settings) {
