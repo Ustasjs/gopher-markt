@@ -51,8 +51,9 @@ func StartServer() {
 	var store = storage.NewPostgresRepository(db)
 
 	r := chi.NewRouter()
-	initMiddleware(r, store)
-	initRoutes(r, settingsMap, store)
+	jwtService := service.NewJWTService([]byte(settingsMap.JWTSecret))
+	initMiddleware(r, jwtService)
+	initRoutes(r, store, jwtService)
 
 	srv := &http.Server{
 		Addr:              string(settingsMap.ServerAddress),
@@ -69,20 +70,22 @@ func StartServer() {
 	}
 }
 
-func initRoutes(r *chi.Mux, s *settings.Settings, store storage.Repository) {
-	jwtService := service.NewJWTService([]byte(s.JWTSecret))
+func initRoutes(r *chi.Mux, store storage.Repository, jwtService *service.JWTService) {
 	userService := service.NewUserService(store, jwtService)
-
 	userHandler := handler.NewUserHandler(userService)
 
-	// Register routes
+	orderService := service.NewOrderService(store)
+	orderHandler := handler.NewOrderHandler(orderService)
+
 	r.Post("/api/user/register", userHandler.Register)
 	r.Post("/api/user/login", userHandler.Login)
+
+	r.With(customMiddleware.RequireAuth()).Post("/api/user/orders", orderHandler.UploadOrder)
 }
 
-func initMiddleware(r *chi.Mux, store customMiddleware.UserRepository) {
+func initMiddleware(r *chi.Mux, parser customMiddleware.TokenParser) {
 	r.Use(logger.LoggerMiddleware)
 	r.Use(customMiddleware.GzipDecompress)
 	r.Use(middleware.Compress(gzip.DefaultCompression))
-	r.Use(customMiddleware.Auth(store))
+	r.Use(customMiddleware.Auth(parser))
 }

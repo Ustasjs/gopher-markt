@@ -58,3 +58,11 @@ func (s *JWTService) ParseToken(tokenString string) (*Claims, error) {
 
 	return nil, fmt.Errorf("invalid token")
 }
+
+func (s *JWTService) ParseUserID(tokenString string) (string, error) {
+	claims, err := s.ParseToken(tokenString)
+	if err != nil {
+		return "", err
+	}
+	return claims.UserID, nil
+}
