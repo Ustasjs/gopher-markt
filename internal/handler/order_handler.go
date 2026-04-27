@@ -89,8 +89,8 @@ func (h *OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 			Status:     o.Status,
 			UploadedAt: o.UploadedAt,
 		}
-		if o.Accrual > 0 {
-			v := float64(o.Accrual)
+		if o.Accrual != nil {
+			v := float64(*o.Accrual) / 100
 			item.Accrual = &v
 		}
 		resp = append(resp, item)
