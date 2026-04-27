@@ -80,11 +80,19 @@ func initRoutes(r *chi.Mux, store storage.Repository, jwtService *service.JWTSer
 	orderService := service.NewOrderService(store)
 	orderHandler := handler.NewOrderHandler(orderService)
 
+	balanceService := service.NewBalanceService(store)
+	balanceHandler := handler.NewBalanceHandler(balanceService)
+
 	r.Post("/api/user/register", userHandler.Register)
 	r.Post("/api/user/login", userHandler.Login)
 
-	r.With(customMiddleware.RequireAuth()).Post("/api/user/orders", orderHandler.UploadOrder)
-	r.With(customMiddleware.RequireAuth()).Get("/api/user/orders", orderHandler.GetOrders)
+	r.Group(func(r chi.Router) {
+		r.Use(customMiddleware.RequireAuth())
+		r.Post("/api/user/orders", orderHandler.UploadOrder)
+		r.Get("/api/user/orders", orderHandler.GetOrders)
+		r.Get("/api/user/balance", balanceHandler.GetBalance)
+		r.Post("/api/user/balance/withdraw", balanceHandler.Withdraw)
+	})
 }
 
 func initMiddleware(r *chi.Mux, parser customMiddleware.TokenParser) {

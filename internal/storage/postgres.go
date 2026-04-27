@@ -97,6 +97,65 @@ func (r *PostgresRepository) GetOrdersByUserID(ctx context.Context, userID strin
 	return orders, nil
 }
 
+func (r *PostgresRepository) GetBalance(ctx context.Context, userID string) (int64, int64, error) {
+	var accrual int64
+	err := r.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(accrual), 0) FROM orders WHERE user_id = $1 AND status = 'PROCESSED'`,
+		userID,
+	).Scan(&accrual)
+	if err != nil {
+		return 0, 0, fmt.Errorf("get balance accrual: %w", err)
+	}
+
+	var withdrawn int64
+	err = r.db.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(sum), 0) FROM withdrawals WHERE user_id = $1`,
+		userID,
+	).Scan(&withdrawn)
+	if err != nil {
+		return 0, 0, fmt.Errorf("get balance withdrawn: %w", err)
+	}
+
+	return accrual - withdrawn, withdrawn, nil
+}
+
+func (r *PostgresRepository) CreateWithdrawal(ctx context.Context, userID, orderNumber string, sum int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("create withdrawal: begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	var accrual int64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(accrual), 0) FROM orders WHERE user_id = $1 AND status = 'PROCESSED'`,
+		userID,
+	).Scan(&accrual); err != nil {
+		return fmt.Errorf("create withdrawal: get accrual: %w", err)
+	}
+
+	var withdrawn int64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COALESCE(SUM(sum), 0) FROM withdrawals WHERE user_id = $1`,
+		userID,
+	).Scan(&withdrawn); err != nil {
+		return fmt.Errorf("create withdrawal: get withdrawn: %w", err)
+	}
+
+	if accrual-withdrawn < sum {
+		return ErrInsufficientBalance
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO withdrawals (user_id, order_number, sum) VALUES ($1, $2, $3)`,
+		userID, orderNumber, sum,
+	); err != nil {
+		return fmt.Errorf("create withdrawal: insert: %w", err)
+	}
+
+	return tx.Commit()
+}
+
 func (r *PostgresRepository) GetOrderByNumber(ctx context.Context, number string) (*model.Order, error) {
 	o := &model.Order{}
 	err := r.db.QueryRowContext(ctx,

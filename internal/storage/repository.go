@@ -13,6 +13,7 @@ var (
 	ErrOrderNotFound          = errors.New("order not found")
 	ErrOrderConflictSameUser  = errors.New("order already uploaded by this user")
 	ErrOrderConflictOtherUser = errors.New("order already uploaded by other user")
+	ErrInsufficientBalance    = errors.New("insufficient balance")
 )
 
 type Repository interface {
@@ -21,4 +22,6 @@ type Repository interface {
 	CreateOrder(ctx context.Context, userID, number string) error
 	GetOrderByNumber(ctx context.Context, number string) (*model.Order, error)
 	GetOrdersByUserID(ctx context.Context, userID string) ([]model.Order, error)
+	GetBalance(ctx context.Context, userID string) (current int64, withdrawn int64, err error)
+	CreateWithdrawal(ctx context.Context, userID, orderNumber string, sum int64) error
 }

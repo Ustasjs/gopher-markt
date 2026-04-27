@@ -11,6 +11,7 @@ import (
 
 	"github.com/ustasjs/gopher-markt/internal/middleware"
 	"github.com/ustasjs/gopher-markt/internal/model"
+	"github.com/ustasjs/gopher-markt/internal/money"
 	"github.com/ustasjs/gopher-markt/internal/service"
 	"github.com/ustasjs/gopher-markt/internal/storage"
 )
@@ -90,7 +91,7 @@ func (h *OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 			UploadedAt: o.UploadedAt,
 		}
 		if o.Accrual != nil {
-			v := float64(*o.Accrual) / 100
+			v := money.FromKopecks(*o.Accrual)
 			item.Accrual = &v
 		}
 		resp = append(resp, item)
