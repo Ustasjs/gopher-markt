@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/ustasjs/gopher-markt/internal/middleware"
+	"github.com/ustasjs/gopher-markt/internal/model"
 	"github.com/ustasjs/gopher-markt/internal/money"
 	"github.com/ustasjs/gopher-markt/internal/service"
 )
@@ -14,6 +16,7 @@ import (
 type BalanceServiceInterface interface {
 	GetBalance(ctx context.Context, userID string) (current int64, withdrawn int64, err error)
 	Withdraw(ctx context.Context, userID, orderNumber string, sumKopecks int64) error
+	GetWithdrawals(ctx context.Context, userID string) ([]model.Withdrawal, error)
 }
 
 type BalanceHandler struct {
@@ -22,6 +25,12 @@ type BalanceHandler struct {
 
 func NewBalanceHandler(balanceService BalanceServiceInterface) *BalanceHandler {
 	return &BalanceHandler{balanceService: balanceService}
+}
+
+type withdrawalResponse struct {
+	Order       string    `json:"order"`
+	Sum         float64   `json:"sum"`
+	ProcessedAt time.Time `json:"processed_at"`
 }
 
 type balanceResponse struct {
@@ -83,4 +92,32 @@ func (h *BalanceHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *BalanceHandler) GetWithdrawals(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.GetUserIDFromContext(r.Context())
+
+	withdrawals, err := h.balanceService.GetWithdrawals(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	if len(withdrawals) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	resp := make([]withdrawalResponse, 0, len(withdrawals))
+	for _, ww := range withdrawals {
+		resp = append(resp, withdrawalResponse{
+			Order:       ww.OrderNumber,
+			Sum:         money.FromKopecks(ww.Sum),
+			ProcessedAt: ww.ProcessedAt,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
 }

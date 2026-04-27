@@ -156,6 +156,30 @@ func (r *PostgresRepository) CreateWithdrawal(ctx context.Context, userID, order
 	return tx.Commit()
 }
 
+func (r *PostgresRepository) GetWithdrawalsByUserID(ctx context.Context, userID string) ([]model.Withdrawal, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT order_number, sum, processed_at FROM withdrawals WHERE user_id = $1 ORDER BY processed_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get withdrawals: %w", err)
+	}
+	defer rows.Close()
+
+	var withdrawals []model.Withdrawal
+	for rows.Next() {
+		var w model.Withdrawal
+		if err := rows.Scan(&w.OrderNumber, &w.Sum, &w.ProcessedAt); err != nil {
+			return nil, fmt.Errorf("get withdrawals: scan: %w", err)
+		}
+		withdrawals = append(withdrawals, w)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("get withdrawals: rows: %w", err)
+	}
+	return withdrawals, nil
+}
+
 func (r *PostgresRepository) GetOrderByNumber(ctx context.Context, number string) (*model.Order, error) {
 	o := &model.Order{}
 	err := r.db.QueryRowContext(ctx,

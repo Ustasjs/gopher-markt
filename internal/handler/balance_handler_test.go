@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ustasjs/gopher-markt/internal/handler/mocks"
+	"github.com/ustasjs/gopher-markt/internal/model"
 	"github.com/ustasjs/gopher-markt/internal/service"
 )
 
@@ -185,6 +187,89 @@ func TestWithdraw(t *testing.T) {
 
 			if rec.Code != tt.expectedStatus {
 				t.Errorf("expected status %d, got %d", tt.expectedStatus, rec.Code)
+			}
+		})
+	}
+}
+
+func TestGetWithdrawals(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+
+	tests := []struct {
+		name               string
+		userID             string
+		mockGetWithdrawals func(ctx context.Context, userID string) ([]model.Withdrawal, error)
+		expectedStatus     int
+		checkBody          func(t *testing.T, body string)
+	}{
+		{
+			name:   "SuccessWithWithdrawals",
+			userID: "user-1",
+			mockGetWithdrawals: func(ctx context.Context, userID string) ([]model.Withdrawal, error) {
+				return []model.Withdrawal{
+					{OrderNumber: "2377225624", Sum: 50000, ProcessedAt: now},
+					{OrderNumber: "9278923470", Sum: 10050, ProcessedAt: now.Add(-time.Hour)},
+				}, nil
+			},
+			expectedStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				var resp []withdrawalResponse
+				if err := json.Unmarshal([]byte(body), &resp); err != nil {
+					t.Fatalf("failed to decode response: %v", err)
+				}
+				if len(resp) != 2 {
+					t.Fatalf("expected 2 withdrawals, got %d", len(resp))
+				}
+				if resp[0].Order != "2377225624" {
+					t.Errorf("expected order 2377225624, got %s", resp[0].Order)
+				}
+				if resp[0].Sum != 500.0 {
+					t.Errorf("expected sum 500.0, got %v", resp[0].Sum)
+				}
+				if resp[1].Sum != 100.50 {
+					t.Errorf("expected sum 100.50, got %v", resp[1].Sum)
+				}
+			},
+		},
+		{
+			name:   "NoWithdrawals",
+			userID: "user-1",
+			mockGetWithdrawals: func(ctx context.Context, userID string) ([]model.Withdrawal, error) {
+				return []model.Withdrawal{}, nil
+			},
+			expectedStatus: http.StatusNoContent,
+			checkBody:      nil,
+		},
+		{
+			name:   "ServiceError",
+			userID: "user-1",
+			mockGetWithdrawals: func(ctx context.Context, userID string) ([]model.Withdrawal, error) {
+				return nil, errors.New("database error")
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkBody:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockService := &mocks.MockBalanceService{
+				GetWithdrawalsFunc: tt.mockGetWithdrawals,
+			}
+
+			h := NewBalanceHandler(mockService)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/user/withdrawals", nil)
+			req = withUserID(req, tt.userID)
+			rec := httptest.NewRecorder()
+
+			h.GetWithdrawals(rec, req)
+
+			if rec.Code != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, rec.Code)
+			}
+			if tt.checkBody != nil {
+				tt.checkBody(t, rec.Body.String())
 			}
 		})
 	}

@@ -92,6 +92,7 @@ func initRoutes(r *chi.Mux, store storage.Repository, jwtService *service.JWTSer
 		r.Get("/api/user/orders", orderHandler.GetOrders)
 		r.Get("/api/user/balance", balanceHandler.GetBalance)
 		r.Post("/api/user/balance/withdraw", balanceHandler.Withdraw)
+		r.Get("/api/user/withdrawals", balanceHandler.GetWithdrawals)
 	})
 }
 
