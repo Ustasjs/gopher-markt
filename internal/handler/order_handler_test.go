@@ -126,9 +126,10 @@ func TestGetOrders(t *testing.T) {
 			name:   "SuccessWithOrders",
 			userID: "user-1",
 			mockGetFunc: func(ctx context.Context, userID string) ([]model.Order, error) {
+				accrual := int64(500)
 				return []model.Order{
-					{Number: "9278923470", Status: "PROCESSED", Accrual: 500, UploadedAt: now},
-					{Number: "12345678903", Status: "PROCESSING", Accrual: 0, UploadedAt: now.Add(-time.Minute)},
+					{Number: "9278923470", Status: "PROCESSED", Accrual: &accrual, UploadedAt: now},
+					{Number: "12345678903", Status: "PROCESSING", Accrual: nil, UploadedAt: now.Add(-time.Minute)},
 				}, nil
 			},
 			expectedStatus: http.StatusOK,
@@ -143,8 +144,8 @@ func TestGetOrders(t *testing.T) {
 				if resp[0].Number != "9278923470" {
 					t.Errorf("expected first order number 9278923470, got %s", resp[0].Number)
 				}
-				if resp[0].Accrual == nil || *resp[0].Accrual != 500 {
-					t.Errorf("expected accrual 500, got %v", resp[0].Accrual)
+				if resp[0].Accrual == nil || *resp[0].Accrual != 5.0 {
+					t.Errorf("expected accrual 5.0, got %v", resp[0].Accrual)
 				}
 				if resp[1].Accrual != nil {
 					t.Errorf("expected no accrual for PROCESSING order, got %v", *resp[1].Accrual)
