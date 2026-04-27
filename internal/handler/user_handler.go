@@ -70,7 +70,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	token, err := h.userService.Login(r.Context(), req.Login, req.Password)
 	if err != nil {
 		// Handle user not found or invalid password
-		if errors.Is(err, storage.ErrUserNotFound) || err.Error() == "invalid password" {
+		if errors.Is(err, storage.ErrUserNotFound) || errors.Is(err, service.ErrInvalidPassword) {
 			http.Error(w, "invalid login or password", http.StatusUnauthorized)
 			return
 		}

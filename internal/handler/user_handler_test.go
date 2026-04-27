@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ustasjs/gopher-markt/internal/handler/mocks"
+	"github.com/ustasjs/gopher-markt/internal/service"
 	"github.com/ustasjs/gopher-markt/internal/storage"
 )
 
@@ -147,7 +148,7 @@ func TestLogin(t *testing.T) {
 			name:        "InvalidPassword",
 			requestBody: `{"login":"testuser","password":"wrongpass"}`,
 			mockLoginFunc: func(ctx context.Context, login, password string) (string, error) {
-				return "", errors.New("invalid password")
+				return "", service.ErrInvalidPassword
 			},
 			expectedStatus:     http.StatusUnauthorized,
 			expectedAuthHeader: "",

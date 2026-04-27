@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/ustasjs/gopher-markt/internal/storage"
 )
+
+var ErrInvalidPassword = errors.New("invalid password")
 
 type UserServiceInterface interface {
 	Register(ctx context.Context, login, password string) (token string, err error)
@@ -51,9 +54,8 @@ func (s *UserService) Login(ctx context.Context, login, password string) (token 
 		return "", err
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
-	if err != nil {
-		return "", fmt.Errorf("invalid password")
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return "", ErrInvalidPassword
 	}
 
 	token, err = s.jwtService.GenerateToken(user.ID)
