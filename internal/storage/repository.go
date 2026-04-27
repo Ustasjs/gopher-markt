@@ -25,4 +25,6 @@ type Repository interface {
 	GetBalance(ctx context.Context, userID string) (current int64, withdrawn int64, err error)
 	CreateWithdrawal(ctx context.Context, userID, orderNumber string, sum int64) error
 	GetWithdrawalsByUserID(ctx context.Context, userID string) ([]model.Withdrawal, error)
+	GetPendingOrders(ctx context.Context, limit int) ([]string, error)
+	UpdateOrderStatus(ctx context.Context, number, status string, accrual *int64) error
 }

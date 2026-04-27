@@ -16,6 +16,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 
+	"github.com/ustasjs/gopher-markt/internal/accrual"
 	"github.com/ustasjs/gopher-markt/internal/config/settings"
 	"github.com/ustasjs/gopher-markt/internal/handler"
 	"github.com/ustasjs/gopher-markt/internal/logger"
@@ -71,6 +72,12 @@ func StartServer() {
 		IdleTimeout:       120 * time.Second,
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
+	accrualClient := accrual.NewClient(string(settingsMap.AccrualSystemAddress))
+	worker := accrual.NewWorker(store, accrualClient)
+	go worker.Run(ctx)
+
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -82,11 +89,12 @@ func StartServer() {
 
 	<-quit
 	logger.Log.Info("shutting down server")
+	cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Log.Error("server shutdown error", zap.Error(err))
 	}
 }

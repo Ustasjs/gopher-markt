@@ -180,6 +180,41 @@ func (r *PostgresRepository) GetWithdrawalsByUserID(ctx context.Context, userID 
 	return withdrawals, nil
 }
 
+func (r *PostgresRepository) GetPendingOrders(ctx context.Context, limit int) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT number FROM orders WHERE status IN ('NEW', 'PROCESSING') ORDER BY uploaded_at ASC LIMIT $1`,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get pending orders: %w", err)
+	}
+	defer rows.Close()
+
+	var numbers []string
+	for rows.Next() {
+		var number string
+		if err := rows.Scan(&number); err != nil {
+			return nil, fmt.Errorf("get pending orders: scan: %w", err)
+		}
+		numbers = append(numbers, number)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("get pending orders: rows: %w", err)
+	}
+	return numbers, nil
+}
+
+func (r *PostgresRepository) UpdateOrderStatus(ctx context.Context, number, status string, accrual *int64) error {
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE orders SET status = $1, accrual = $2 WHERE number = $3`,
+		status, accrual, number,
+	)
+	if err != nil {
+		return fmt.Errorf("update order status: %w", err)
+	}
+	return nil
+}
+
 func (r *PostgresRepository) GetOrderByNumber(ctx context.Context, number string) (*model.Order, error) {
 	o := &model.Order{}
 	err := r.db.QueryRowContext(ctx,
