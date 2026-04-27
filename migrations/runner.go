@@ -2,19 +2,27 @@ package migrations
 
 import (
 	"database/sql"
+	"embed"
 	"errors"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 )
 
+//go:embed *.sql
+var fs embed.FS
+
 func RunMigrations(db *sql.DB) error {
+	source, err := iofs.New(fs, ".")
+	if err != nil {
+		return err
+	}
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
 		return err
 	}
-	m, err := migrate.NewWithDatabaseInstance("file://migrations", "postgres", driver)
+	m, err := migrate.NewWithInstance("iofs", source, "postgres", driver)
 	if err != nil {
 		return err
 	}

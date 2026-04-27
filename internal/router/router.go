@@ -28,22 +28,25 @@ func StartServer() {
 		panic(loggerErr)
 	}
 
-	var db *sql.DB
-	if settingsMap.DatabaseURI != "" {
-		var dbErr error
-		db, dbErr = sql.Open("pgx", string(settingsMap.DatabaseURI))
+	if settingsMap.DatabaseURI == "" {
+		panic("DATABASE_URI is required")
+	}
 
-		logger.Log.Info("Connect to database")
+	db, dbErr := sql.Open("pgx", string(settingsMap.DatabaseURI))
+	if dbErr != nil {
+		panic(dbErr)
+	}
+	defer db.Close()
 
-		if dbErr != nil {
-			panic(dbErr)
-		}
-		defer db.Close()
+	logger.Log.Info("Connect to database")
 
-		migrationsErr := migrations.RunMigrations(db)
-		if migrationsErr != nil {
-			panic(migrationsErr)
-		}
+	if pingErr := db.Ping(); pingErr != nil {
+		panic(pingErr)
+	}
+
+	migrationsErr := migrations.RunMigrations(db)
+	if migrationsErr != nil {
+		panic(migrationsErr)
 	}
 
 	logger.Log.Info("Starting server on:", zap.String("address", string(settingsMap.ServerAddress)))

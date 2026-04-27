@@ -6,8 +6,6 @@ import (
 	"strings"
 )
 
-const AuthCookieName = "auth_token"
-
 type contextKey string
 
 const UserIDContextKey contextKey = "user_id"

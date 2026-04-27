@@ -27,7 +27,7 @@ func initAccrualSystemAddress(settings *Settings) {
 	var accrualSystemAddressValue AccrualSystemAddress = "localhost:3000"
 	settings.AccrualSystemAddress = accrualSystemAddressValue
 
-	flag.Func("a", "Input accrual system address", func(flagValue string) error {
+	flag.Func("r", "Input accrual system address", func(flagValue string) error {
 		err := validateAccrualSystemAddress(flagValue)
 		if err != nil {
 			return err
