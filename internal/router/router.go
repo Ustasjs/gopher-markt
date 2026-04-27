@@ -2,7 +2,19 @@ package router
 
 import (
 	"compress/gzip"
+	"context"
 	"database/sql"
+	"errors"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"go.uber.org/zap"
 
 	"github.com/ustasjs/gopher-markt/internal/config/settings"
 	"github.com/ustasjs/gopher-markt/internal/handler"
@@ -11,14 +23,6 @@ import (
 	"github.com/ustasjs/gopher-markt/internal/service"
 	"github.com/ustasjs/gopher-markt/internal/storage"
 	"github.com/ustasjs/gopher-markt/migrations"
-
-	"net/http"
-	"time"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"go.uber.org/zap"
 )
 
 func StartServer() {
@@ -67,9 +71,23 @@ func StartServer() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	err := srv.ListenAndServe()
-	if err != nil {
-		panic(err)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Log.Fatal("server error", zap.Error(err))
+		}
+	}()
+
+	<-quit
+	logger.Log.Info("shutting down server")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Log.Error("server shutdown error", zap.Error(err))
 	}
 }
 
