@@ -73,6 +73,30 @@ func (r *PostgresRepository) CreateOrder(ctx context.Context, userID, number str
 	return nil
 }
 
+func (r *PostgresRepository) GetOrdersByUserID(ctx context.Context, userID string) ([]model.Order, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT number, status, accrual, uploaded_at FROM orders WHERE user_id = $1 ORDER BY uploaded_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("get orders by user id: %w", err)
+	}
+	defer rows.Close()
+
+	var orders []model.Order
+	for rows.Next() {
+		var o model.Order
+		if err := rows.Scan(&o.Number, &o.Status, &o.Accrual, &o.UploadedAt); err != nil {
+			return nil, fmt.Errorf("get orders by user id: scan: %w", err)
+		}
+		orders = append(orders, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("get orders by user id: rows: %w", err)
+	}
+	return orders, nil
+}
+
 func (r *PostgresRepository) GetOrderByNumber(ctx context.Context, number string) (*model.Order, error) {
 	o := &model.Order{}
 	err := r.db.QueryRowContext(ctx,

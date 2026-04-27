@@ -81,6 +81,7 @@ func initRoutes(r *chi.Mux, store storage.Repository, jwtService *service.JWTSer
 	r.Post("/api/user/login", userHandler.Login)
 
 	r.With(customMiddleware.RequireAuth()).Post("/api/user/orders", orderHandler.UploadOrder)
+	r.With(customMiddleware.RequireAuth()).Get("/api/user/orders", orderHandler.GetOrders)
 }
 
 func initMiddleware(r *chi.Mux, parser customMiddleware.TokenParser) {

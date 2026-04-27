@@ -2,14 +2,17 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ustasjs/gopher-markt/internal/handler/mocks"
 	"github.com/ustasjs/gopher-markt/internal/middleware"
+	"github.com/ustasjs/gopher-markt/internal/model"
 	"github.com/ustasjs/gopher-markt/internal/service"
 	"github.com/ustasjs/gopher-markt/internal/storage"
 )
@@ -104,6 +107,89 @@ func TestUploadOrder(t *testing.T) {
 
 			if rec.Code != tt.expectedStatus {
 				t.Errorf("expected status %d, got %d", tt.expectedStatus, rec.Code)
+			}
+		})
+	}
+}
+
+func TestGetOrders(t *testing.T) {
+	now := time.Now().Truncate(time.Second)
+
+	tests := []struct {
+		name           string
+		userID         string
+		mockGetFunc    func(ctx context.Context, userID string) ([]model.Order, error)
+		expectedStatus int
+		checkBody      func(t *testing.T, body string)
+	}{
+		{
+			name:   "SuccessWithOrders",
+			userID: "user-1",
+			mockGetFunc: func(ctx context.Context, userID string) ([]model.Order, error) {
+				return []model.Order{
+					{Number: "9278923470", Status: "PROCESSED", Accrual: 500, UploadedAt: now},
+					{Number: "12345678903", Status: "PROCESSING", Accrual: 0, UploadedAt: now.Add(-time.Minute)},
+				}, nil
+			},
+			expectedStatus: http.StatusOK,
+			checkBody: func(t *testing.T, body string) {
+				var resp []orderResponse
+				if err := json.Unmarshal([]byte(body), &resp); err != nil {
+					t.Fatalf("failed to decode response: %v", err)
+				}
+				if len(resp) != 2 {
+					t.Fatalf("expected 2 orders, got %d", len(resp))
+				}
+				if resp[0].Number != "9278923470" {
+					t.Errorf("expected first order number 9278923470, got %s", resp[0].Number)
+				}
+				if resp[0].Accrual == nil || *resp[0].Accrual != 500 {
+					t.Errorf("expected accrual 500, got %v", resp[0].Accrual)
+				}
+				if resp[1].Accrual != nil {
+					t.Errorf("expected no accrual for PROCESSING order, got %v", *resp[1].Accrual)
+				}
+			},
+		},
+		{
+			name:   "NoOrders",
+			userID: "user-1",
+			mockGetFunc: func(ctx context.Context, userID string) ([]model.Order, error) {
+				return []model.Order{}, nil
+			},
+			expectedStatus: http.StatusNoContent,
+			checkBody:      nil,
+		},
+		{
+			name:   "ServiceError",
+			userID: "user-1",
+			mockGetFunc: func(ctx context.Context, userID string) ([]model.Order, error) {
+				return nil, errors.New("database error")
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkBody:      nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockService := &mocks.MockOrderService{
+				GetOrdersFunc: tt.mockGetFunc,
+			}
+
+			h := NewOrderHandler(mockService)
+
+			req := httptest.NewRequest(http.MethodGet, "/api/user/orders", nil)
+			req = withUserID(req, tt.userID)
+			rec := httptest.NewRecorder()
+
+			h.GetOrders(rec, req)
+
+			if rec.Code != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, rec.Code)
+			}
+			if tt.checkBody != nil {
+				tt.checkBody(t, rec.Body.String())
 			}
 		})
 	}

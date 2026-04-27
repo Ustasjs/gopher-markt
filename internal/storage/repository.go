@@ -20,4 +20,5 @@ type Repository interface {
 	GetUserByLogin(ctx context.Context, login string) (*model.User, error)
 	CreateOrder(ctx context.Context, userID, number string) error
 	GetOrderByNumber(ctx context.Context, number string) (*model.Order, error)
+	GetOrdersByUserID(ctx context.Context, userID string) ([]model.Order, error)
 }

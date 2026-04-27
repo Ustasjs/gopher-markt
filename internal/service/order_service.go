@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ustasjs/gopher-markt/internal/model"
 	"github.com/ustasjs/gopher-markt/internal/storage"
 )
 
 type OrderServiceInterface interface {
 	UploadOrder(ctx context.Context, userID, orderNumber string) error
+	GetOrders(ctx context.Context, userID string) ([]model.Order, error)
 }
 
 type OrderService struct {
@@ -24,6 +26,10 @@ func (s *OrderService) UploadOrder(ctx context.Context, userID, orderNumber stri
 		return ErrInvalidOrderNumber
 	}
 	return s.repo.CreateOrder(ctx, userID, orderNumber)
+}
+
+func (s *OrderService) GetOrders(ctx context.Context, userID string) ([]model.Order, error) {
+	return s.repo.GetOrdersByUserID(ctx, userID)
 }
 
 var ErrInvalidOrderNumber = fmt.Errorf("invalid order number")
