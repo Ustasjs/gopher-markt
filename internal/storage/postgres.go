@@ -126,6 +126,10 @@ func (r *PostgresRepository) CreateWithdrawal(ctx context.Context, userID, order
 	}
 	defer tx.Rollback()
 
+	if _, err := tx.ExecContext(ctx, `SELECT id FROM users WHERE id = $1 FOR UPDATE`, userID); err != nil {
+		return fmt.Errorf("create withdrawal: lock user: %w", err)
+	}
+
 	var accrual int64
 	if err := tx.QueryRowContext(ctx,
 		`SELECT COALESCE(SUM(accrual), 0) FROM orders WHERE user_id = $1 AND status = 'PROCESSED'`,
