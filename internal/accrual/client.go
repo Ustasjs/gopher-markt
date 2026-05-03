@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ustasjs/gopher-markt/internal/logger"
+	"go.uber.org/zap"
 )
 
 type AccrualResponse struct {
@@ -64,7 +67,10 @@ func (c *Client) GetOrder(ctx context.Context, number string) (response *Accrual
 
 func parseRetryAfter(resp *http.Response) time.Duration {
 	if v := resp.Header.Get("Retry-After"); v != "" {
-		if secs, err := strconv.Atoi(v); err == nil && secs > 0 {
+		secs, err := strconv.Atoi(v)
+		if err != nil {
+			logger.Log.Warn("accrual client: parse Retry-After header", zap.String("value", v), zap.Error(err))
+		} else if secs > 0 {
 			return time.Duration(secs) * time.Second
 		}
 	}
