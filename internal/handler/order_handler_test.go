@@ -18,8 +18,7 @@ import (
 )
 
 func withUserID(r *http.Request, userID string) *http.Request {
-	ctx := context.WithValue(r.Context(), middleware.UserIDContextKey, userID)
-	return r.WithContext(ctx)
+	return r.WithContext(middleware.ContextWithUserID(r.Context(), userID))
 }
 
 func TestUploadOrder(t *testing.T) {

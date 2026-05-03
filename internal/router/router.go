@@ -123,7 +123,7 @@ func initRoutes(r *chi.Mux, store storage.Repository, jwtService *service.JWTSer
 }
 
 func initMiddleware(r *chi.Mux, parser customMiddleware.TokenParser) {
-	r.Use(logger.LoggerMiddleware)
+	r.Use(customMiddleware.LoggerMiddleware)
 	r.Use(customMiddleware.GzipDecompress)
 	r.Use(middleware.Compress(gzip.DefaultCompression))
 	r.Use(customMiddleware.Auth(parser))

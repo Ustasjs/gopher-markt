@@ -8,19 +8,19 @@ import (
 
 type contextKey string
 
-const UserIDContextKey contextKey = "user_id"
-
-type UserRepository interface {
-	CreateUser(ctx context.Context, login, passwordHash string) (userID string, err error)
-}
+const userIDContextKey contextKey = "user_id"
 
 type TokenParser interface {
 	ParseUserID(tokenString string) (userID string, err error)
 }
 
 func GetUserIDFromContext(ctx context.Context) (string, bool) {
-	userID, ok := ctx.Value(UserIDContextKey).(string)
+	userID, ok := ctx.Value(userIDContextKey).(string)
 	return userID, ok
+}
+
+func ContextWithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, userIDContextKey, userID)
 }
 
 func Auth(parser TokenParser) func(http.Handler) http.Handler {
@@ -30,7 +30,7 @@ func Auth(parser TokenParser) func(http.Handler) http.Handler {
 			if strings.HasPrefix(authHeader, "Bearer ") {
 				tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 				if userID, err := parser.ParseUserID(tokenString); err == nil && userID != "" {
-					ctx := context.WithValue(r.Context(), UserIDContextKey, userID)
+					ctx := ContextWithUserID(r.Context(), userID)
 					r = r.WithContext(ctx)
 				}
 			}
