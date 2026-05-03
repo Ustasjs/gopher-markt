@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -74,14 +73,12 @@ func StartServer() error {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	accrualClient := accrual.NewClient(string(settingsMap.AccrualSystemAddress))
 	worker := accrual.NewWorker(store, accrualClient)
 	go worker.Run(ctx)
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -89,9 +86,9 @@ func StartServer() error {
 		}
 	}()
 
-	<-quit
+	<-ctx.Done()
+	stop()
 	logger.Log.Info("shutting down server")
-	cancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
