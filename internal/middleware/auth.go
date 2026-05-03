@@ -27,8 +27,8 @@ func Auth(parser TokenParser) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+			tokenString, hasPrefix := strings.CutPrefix(authHeader, "Bearer ")
+			if hasPrefix {
 				if userID, err := parser.ParseUserID(tokenString); err == nil && userID != "" {
 					ctx := ContextWithUserID(r.Context(), userID)
 					r = r.WithContext(ctx)
