@@ -18,16 +18,22 @@ type Settings struct {
 	JWTSecret            JWTSecret
 }
 
-func InitSettings() *Settings {
+func InitSettings() (*Settings, error) {
 	settings := new(Settings)
 
-	initServerAddress(settings)
-	initAccrualSystemAddress(settings)
-	initLogLevel(settings)
+	if err := initServerAddress(settings); err != nil {
+		return nil, err
+	}
+	if err := initAccrualSystemAddress(settings); err != nil {
+		return nil, err
+	}
+	if err := initLogLevel(settings); err != nil {
+		return nil, err
+	}
 	initDatabaseURI(settings)
 	initJWTSecret(settings)
 
 	flag.Parse()
 
-	return settings
+	return settings, nil
 }

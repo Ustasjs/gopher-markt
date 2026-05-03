@@ -26,32 +26,34 @@ import (
 	"github.com/ustasjs/gopher-markt/migrations"
 )
 
-func StartServer() {
-	settingsMap := settings.InitSettings()
-	loggerErr := logger.Initialize(settingsMap.LogLevel)
-	if loggerErr != nil {
-		panic(loggerErr)
+func StartServer() error {
+	settingsMap, err := settings.InitSettings()
+	if err != nil {
+		return err
+	}
+
+	if err = logger.Initialize(settingsMap.LogLevel); err != nil {
+		return err
 	}
 
 	if settingsMap.DatabaseURI == "" {
-		panic("DATABASE_URI is required")
+		return errors.New("DATABASE_URI is required")
 	}
 
-	db, dbErr := sql.Open("pgx", string(settingsMap.DatabaseURI))
-	if dbErr != nil {
-		panic(dbErr)
+	db, err := sql.Open("pgx", string(settingsMap.DatabaseURI))
+	if err != nil {
+		return err
 	}
 	defer db.Close()
 
 	logger.Log.Info("Connect to database")
 
-	if pingErr := db.Ping(); pingErr != nil {
-		panic(pingErr)
+	if err = db.Ping(); err != nil {
+		return err
 	}
 
-	migrationsErr := migrations.RunMigrations(db)
-	if migrationsErr != nil {
-		panic(migrationsErr)
+	if err = migrations.RunMigrations(db); err != nil {
+		return err
 	}
 
 	logger.Log.Info("Starting server on:", zap.String("address", string(settingsMap.ServerAddress)))
@@ -97,6 +99,7 @@ func StartServer() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Log.Error("server shutdown error", zap.Error(err))
 	}
+	return nil
 }
 
 func initRoutes(r *chi.Mux, store storage.Repository, jwtService *service.JWTService) {

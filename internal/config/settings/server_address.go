@@ -11,13 +11,11 @@ func validateServerAddress(serverAddress string) error {
 	return validateBaseServerAddress(serverAddress, errorMessageServerAddress)
 }
 
-func initServerAddress(settings *Settings) {
-	var serverAddressValue ServerAddress = "localhost:8080"
-	settings.ServerAddress = serverAddressValue
+func initServerAddress(settings *Settings) error {
+	settings.ServerAddress = "localhost:8080"
 
 	flag.Func("a", "Input server address", func(flagValue string) error {
-		err := validateServerAddress(flagValue)
-		if err != nil {
+		if err := validateServerAddress(flagValue); err != nil {
 			return err
 		}
 		settings.ServerAddress = ServerAddress(flagValue)
@@ -25,10 +23,10 @@ func initServerAddress(settings *Settings) {
 	})
 
 	if envServerAddress := os.Getenv("RUN_ADDRESS"); envServerAddress != "" {
-		err := validateServerAddress(envServerAddress)
-		if err != nil {
-			panic(err)
+		if err := validateServerAddress(envServerAddress); err != nil {
+			return err
 		}
 		settings.ServerAddress = ServerAddress(envServerAddress)
 	}
+	return nil
 }

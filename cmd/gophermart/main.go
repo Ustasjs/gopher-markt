@@ -1,7 +1,13 @@
 package main
 
-import "github.com/ustasjs/gopher-markt/internal/router"
+import (
+	"log"
+
+	"github.com/ustasjs/gopher-markt/internal/router"
+)
 
 func main() {
-	router.StartServer()
+	if err := router.StartServer(); err != nil {
+		log.Fatal(err)
+	}
 }

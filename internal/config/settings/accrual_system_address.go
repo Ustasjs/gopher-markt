@@ -23,13 +23,11 @@ func validateAccrualSystemAddress(accrualSystemAddress string) error {
 	return nil
 }
 
-func initAccrualSystemAddress(settings *Settings) {
-	var accrualSystemAddressValue AccrualSystemAddress = "localhost:3000"
-	settings.AccrualSystemAddress = accrualSystemAddressValue
+func initAccrualSystemAddress(settings *Settings) error {
+	settings.AccrualSystemAddress = "localhost:3000"
 
 	flag.Func("r", "Input accrual system address", func(flagValue string) error {
-		err := validateAccrualSystemAddress(flagValue)
-		if err != nil {
+		if err := validateAccrualSystemAddress(flagValue); err != nil {
 			return err
 		}
 		settings.AccrualSystemAddress = AccrualSystemAddress(flagValue)
@@ -37,10 +35,10 @@ func initAccrualSystemAddress(settings *Settings) {
 	})
 
 	if envAccrualSystemAddress := os.Getenv("ACCRUAL_SYSTEM_ADDRESS"); envAccrualSystemAddress != "" {
-		err := validateAccrualSystemAddress(envAccrualSystemAddress)
-		if err != nil {
-			panic(err)
+		if err := validateAccrualSystemAddress(envAccrualSystemAddress); err != nil {
+			return err
 		}
 		settings.AccrualSystemAddress = AccrualSystemAddress(envAccrualSystemAddress)
 	}
+	return nil
 }
