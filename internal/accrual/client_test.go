@@ -35,11 +35,12 @@ func TestGetOrder(t *testing.T) {
 	accrualVal := 500.5
 
 	tests := []struct {
-		name         string
-		handler      http.HandlerFunc
-		wantStatus   int
-		wantResponse *AccrualResponse
-		wantErr      bool
+		name           string
+		handler        http.HandlerFunc
+		wantStatus     int
+		wantResponse   *AccrualResponse
+		wantRetryAfter time.Duration
+		wantErr        bool
 	}{
 		{
 			name: "200 with accrual",
@@ -79,6 +80,25 @@ func TestGetOrder(t *testing.T) {
 			wantStatus:   http.StatusNotFound,
 			wantResponse: nil,
 		},
+		{
+			name: "429 returns retry-after to caller",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Retry-After", "5")
+				w.WriteHeader(http.StatusTooManyRequests)
+			},
+			wantStatus:     http.StatusTooManyRequests,
+			wantResponse:   nil,
+			wantRetryAfter: 5 * time.Second,
+		},
+		{
+			name: "429 without header defaults to 1 minute",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusTooManyRequests)
+			},
+			wantStatus:     http.StatusTooManyRequests,
+			wantResponse:   nil,
+			wantRetryAfter: time.Minute,
+		},
 	}
 
 	for _, tt := range tests {
@@ -87,7 +107,7 @@ func TestGetOrder(t *testing.T) {
 			defer server.Close()
 
 			client := NewClient(server.URL)
-			resp, status, err := client.GetOrder(context.Background(), "12345678903")
+			resp, status, retryAfter, err := client.GetOrder(context.Background(), "12345678903")
 
 			if tt.wantErr && err == nil {
 				t.Fatal("expected error, got nil")
@@ -97,6 +117,9 @@ func TestGetOrder(t *testing.T) {
 			}
 			if status != tt.wantStatus {
 				t.Errorf("status = %d, want %d", status, tt.wantStatus)
+			}
+			if retryAfter != tt.wantRetryAfter {
+				t.Errorf("retryAfter = %v, want %v", retryAfter, tt.wantRetryAfter)
 			}
 			if tt.wantResponse == nil && resp != nil {
 				t.Errorf("expected nil response, got %+v", resp)
@@ -212,41 +235,11 @@ func TestRetryingDoer_NoRetryOn4xx(t *testing.T) {
 	}
 }
 
-func TestRetryingDoer_429RespectsRetryAfter(t *testing.T) {
-	var firstCallAt, secondCallAt time.Time
-	stub := &stubDoer{}
-	stub.fn = func(req *http.Request) (*http.Response, error) {
-		if atomic.LoadInt32(&stub.calls) == 1 {
-			firstCallAt = time.Now()
-			h := http.Header{}
-			h.Set("Retry-After", "1")
-			return respWithStatus(http.StatusTooManyRequests, h), nil
-		}
-		secondCallAt = time.Now()
-		return respWithStatus(http.StatusOK, nil), nil
-	}
-
-	doer := newRetryingDoer(stub, 3, time.Millisecond)
-	resp, err := doer.Do(newTestRequest(t, context.Background()))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
-	}
-	if got := atomic.LoadInt32(&stub.calls); got != 2 {
-		t.Errorf("calls = %d, want 2", got)
-	}
-	// Между попытками должно пройти не меньше 1 секунды (Retry-After: 1).
-	if gap := secondCallAt.Sub(firstCallAt); gap < time.Second {
-		t.Errorf("gap between attempts = %v, want >= 1s (Retry-After respected)", gap)
-	}
-}
-
-func TestRetryingDoer_429NoHeaderUsesBackoff(t *testing.T) {
+func TestRetryingDoer_NoRetryOn429(t *testing.T) {
 	stub := &stubDoer{fn: func(req *http.Request) (*http.Response, error) {
-		// 429 без Retry-After — должно использоваться экспоненциальное ожидание.
-		return respWithStatus(http.StatusTooManyRequests, nil), nil
+		h := http.Header{}
+		h.Set("Retry-After", "60")
+		return respWithStatus(http.StatusTooManyRequests, h), nil
 	}}
 
 	doer := newRetryingDoer(stub, 3, time.Millisecond)
@@ -257,8 +250,8 @@ func TestRetryingDoer_429NoHeaderUsesBackoff(t *testing.T) {
 	if resp.StatusCode != http.StatusTooManyRequests {
 		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusTooManyRequests)
 	}
-	if got := atomic.LoadInt32(&stub.calls); got != 3 {
-		t.Errorf("calls = %d, want 3", got)
+	if got := atomic.LoadInt32(&stub.calls); got != 1 {
+		t.Errorf("calls = %d, want 1 (429 не ретраится в обёртке)", got)
 	}
 }
 
@@ -311,16 +304,15 @@ func TestRetryingDoer_StopsWhenContextCancelledBetweenRetries(t *testing.T) {
 	}
 }
 
-// проверяем что parseRetryAfter корректно интерпретирует и пустые/невалидные значения как 0
 func TestParseRetryAfter(t *testing.T) {
 	cases := []struct {
 		header string
 		want   time.Duration
 	}{
-		{"", 0},
-		{"abc", 0},
-		{"0", 0},
-		{"-5", 0},
+		{"", time.Minute},
+		{"abc", time.Minute},
+		{"0", time.Minute},
+		{"-5", time.Minute},
 		{"3", 3 * time.Second},
 		{strconv.Itoa(60), 60 * time.Second},
 	}

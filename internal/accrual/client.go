@@ -49,30 +49,34 @@ func NewClient(address string) *Client {
 	}
 }
 
-func (c *Client) GetOrder(ctx context.Context, number string) (*AccrualResponse, int, error) {
+func (c *Client) GetOrder(ctx context.Context, number string) (*AccrualResponse, int, time.Duration, error) {
 	url := fmt.Sprintf("%s/api/orders/%s", c.baseURL, number)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, 0, fmt.Errorf("accrual client: build request: %w", err)
+		return nil, 0, 0, fmt.Errorf("accrual client: build request: %w", err)
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("accrual client: do request: %w", err)
+		return nil, 0, 0, fmt.Errorf("accrual client: do request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return nil, resp.StatusCode, parseRetryAfter(resp), nil
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, resp.StatusCode, nil
+		return nil, resp.StatusCode, 0, nil
 	}
 
 	var result AccrualResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, resp.StatusCode, fmt.Errorf("accrual client: decode response: %w", err)
+		return nil, resp.StatusCode, 0, fmt.Errorf("accrual client: decode response: %w", err)
 	}
 
-	return &result, resp.StatusCode, nil
+	return &result, resp.StatusCode, 0, nil
 }
 
 type retryingDoer struct {
@@ -116,17 +120,11 @@ func classify(resp *http.Response, err error, baseDelay time.Duration, attempt i
 		}
 		return backoff(baseDelay, attempt), true
 	}
-	switch {
-	case resp.StatusCode == http.StatusTooManyRequests:
-		if d := parseRetryAfter(resp); d > 0 {
-			return d, true
-		}
+	// 429 не ретраим здесь — координируется на уровне Worker pool.
+	if resp.StatusCode >= 500 {
 		return backoff(baseDelay, attempt), true
-	case resp.StatusCode >= 500:
-		return backoff(baseDelay, attempt), true
-	default:
-		return 0, false
 	}
+	return 0, false
 }
 
 func backoff(base time.Duration, attempt int) time.Duration {
@@ -134,17 +132,13 @@ func backoff(base time.Duration, attempt int) time.Duration {
 }
 
 func parseRetryAfter(resp *http.Response) time.Duration {
-	v := resp.Header.Get("Retry-After")
-	if v == "" {
-		return 0
+	if v := resp.Header.Get("Retry-After"); v != "" {
+		secs, err := strconv.Atoi(v)
+		if err != nil {
+			logger.Log.Warn("accrual client: parse Retry-After header", zap.String("value", v), zap.Error(err))
+		} else if secs > 0 {
+			return time.Duration(secs) * time.Second
+		}
 	}
-	secs, err := strconv.Atoi(v)
-	if err != nil {
-		logger.Log.Warn("accrual client: parse Retry-After header", zap.String("value", v), zap.Error(err))
-		return 0
-	}
-	if secs <= 0 {
-		return 0
-	}
-	return time.Duration(secs) * time.Second
+	return time.Minute
 }

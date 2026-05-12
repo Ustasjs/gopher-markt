@@ -3,6 +3,7 @@ package accrual
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -14,6 +15,7 @@ import (
 const (
 	pollInterval = 3 * time.Second
 	batchLimit   = 100
+	numWorkers   = 5
 
 	statusProcessing = "PROCESSING"
 	statusProcessed  = "PROCESSED"
@@ -25,17 +27,44 @@ type orderRepository interface {
 	UpdateOrderStatus(ctx context.Context, number, status string, accrual *int64) error
 }
 
-type Worker struct {
-	repo   orderRepository
-	client *Client
+type WorkerPool struct {
+	repo         orderRepository
+	client       *Client
+	workers      int
+	pollInterval time.Duration
+
+	pauseMu    sync.Mutex
+	pauseUntil time.Time
 }
 
-func NewWorker(repo orderRepository, client *Client) *Worker {
-	return &Worker{repo: repo, client: client}
+func NewWorkerPool(repo orderRepository, client *Client) *WorkerPool {
+	return &WorkerPool{
+		repo:         repo,
+		client:       client,
+		workers:      numWorkers,
+		pollInterval: pollInterval,
+	}
 }
 
-func (w *Worker) Run(ctx context.Context) {
-	ticker := time.NewTicker(pollInterval)
+func (w *WorkerPool) Run(ctx context.Context) {
+	jobs := make(chan string)
+	var wg sync.WaitGroup
+
+	for i := 0; i < w.workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w.workerLoop(ctx, jobs)
+		}()
+	}
+
+	w.dispatch(ctx, jobs)
+	close(jobs)
+	wg.Wait()
+}
+
+func (w *WorkerPool) dispatch(ctx context.Context, jobs chan<- string) {
+	ticker := time.NewTicker(w.pollInterval)
 	defer ticker.Stop()
 
 	for {
@@ -43,46 +72,98 @@ func (w *Worker) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			w.processBatch(ctx)
+			if err := w.waitPause(ctx); err != nil {
+				return
+			}
+			numbers, err := w.repo.GetPendingOrders(ctx, batchLimit)
+			if err != nil {
+				logger.Log.Error("accrual worker: get pending orders", zap.Error(err))
+				continue
+			}
+			for _, number := range numbers {
+				select {
+				case <-ctx.Done():
+					return
+				case jobs <- number:
+				}
+			}
 		}
 	}
 }
 
-func (w *Worker) processBatch(ctx context.Context) {
-	numbers, err := w.repo.GetPendingOrders(ctx, batchLimit)
+func (w *WorkerPool) workerLoop(ctx context.Context, jobs <-chan string) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case number, ok := <-jobs:
+			if !ok {
+				return
+			}
+			if err := w.waitPause(ctx); err != nil {
+				return
+			}
+			w.process(ctx, number)
+		}
+	}
+}
+
+func (w *WorkerPool) process(ctx context.Context, number string) {
+	resp, status, retryAfter, err := w.client.GetOrder(ctx, number)
 	if err != nil {
-		logger.Log.Error("accrual worker: get pending orders", zap.Error(err))
+		logger.Log.Error("accrual worker: get order", zap.String("number", number), zap.Error(err))
 		return
 	}
 
-	for _, number := range numbers {
-		if ctx.Err() != nil {
-			return
+	switch status {
+	case http.StatusOK:
+		if err := w.updateOrder(ctx, resp); err != nil {
+			logger.Log.Error("accrual worker: update order", zap.String("number", number), zap.Error(err))
 		}
-
-		resp, status, err := w.client.GetOrder(ctx, number)
-		if err != nil {
-			logger.Log.Error("accrual worker: get order", zap.String("number", number), zap.Error(err))
-			continue
-		}
-
-		switch status {
-		case http.StatusOK:
-			if err := w.updateOrder(ctx, resp); err != nil {
-				logger.Log.Error("accrual worker: update order", zap.String("number", number), zap.Error(err))
-			}
-		case http.StatusNoContent:
-			// заказ не зарегистрирован в accrual — оставляем NEW
-		default:
-			logger.Log.Error("accrual worker: unexpected status",
-				zap.String("number", number),
-				zap.Int("status", status),
-			)
-		}
+	case http.StatusNoContent:
+		// заказ не зарегистрирован в accrual — оставляем NEW
+	case http.StatusTooManyRequests:
+		logger.Log.Info("accrual worker: rate limited", zap.Duration("retry_after", retryAfter))
+		w.setPause(retryAfter)
+	default:
+		logger.Log.Error("accrual worker: unexpected status",
+			zap.String("number", number),
+			zap.Int("status", status),
+		)
 	}
 }
 
-func (w *Worker) updateOrder(ctx context.Context, resp *AccrualResponse) error {
+func (w *WorkerPool) waitPause(ctx context.Context) error {
+	w.pauseMu.Lock()
+	until := w.pauseUntil
+	w.pauseMu.Unlock()
+	d := time.Until(until)
+	if d <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (w *WorkerPool) setPause(d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	w.pauseMu.Lock()
+	defer w.pauseMu.Unlock()
+	until := time.Now().Add(d)
+	if until.After(w.pauseUntil) {
+		w.pauseUntil = until
+	}
+}
+
+func (w *WorkerPool) updateOrder(ctx context.Context, resp *AccrualResponse) error {
 	newStatus, shouldUpdate := mapStatus(resp.Status)
 	if !shouldUpdate {
 		return nil

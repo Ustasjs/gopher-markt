@@ -77,8 +77,12 @@ func StartServer() error {
 	defer stop()
 
 	accrualClient := accrual.NewClient(string(settingsMap.AccrualSystemAddress))
-	worker := accrual.NewWorker(store, accrualClient)
-	go worker.Run(ctx)
+	pool := accrual.NewWorkerPool(store, accrualClient)
+	poolDone := make(chan struct{})
+	go func() {
+		defer close(poolDone)
+		pool.Run(ctx)
+	}()
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -96,6 +100,9 @@ func StartServer() error {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		logger.Log.Error("server shutdown error", zap.Error(err))
 	}
+
+	<-poolDone
+	logger.Log.Info("accrual worker pool stopped")
 	return nil
 }
 
