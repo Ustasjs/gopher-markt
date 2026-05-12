@@ -99,7 +99,7 @@ func StartServer() error {
 	return nil
 }
 
-func initRoutes(r *chi.Mux, store storage.Repository, jwtService *service.JWTService) {
+func initRoutes(r *chi.Mux, store *storage.PostgresRepository, jwtService *service.JWTService) {
 	userService := service.NewUserService(store, jwtService)
 	userHandler := handler.NewUserHandler(userService)
 

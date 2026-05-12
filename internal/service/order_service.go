@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/ustasjs/gopher-markt/internal/model"
-	"github.com/ustasjs/gopher-markt/internal/storage"
 )
 
 type OrderServiceInterface interface {
@@ -13,11 +12,16 @@ type OrderServiceInterface interface {
 	GetOrders(ctx context.Context, userID string) ([]model.Order, error)
 }
 
-type OrderService struct {
-	repo storage.Repository
+type orderRepository interface {
+	CreateOrder(ctx context.Context, userID, number string) error
+	GetOrdersByUserID(ctx context.Context, userID string) ([]model.Order, error)
 }
 
-func NewOrderService(repo storage.Repository) *OrderService {
+type OrderService struct {
+	repo orderRepository
+}
+
+func NewOrderService(repo orderRepository) *OrderService {
 	return &OrderService{repo: repo}
 }
 

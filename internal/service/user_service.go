@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/ustasjs/gopher-markt/internal/storage"
+	"github.com/ustasjs/gopher-markt/internal/model"
 )
 
 var ErrInvalidPassword = errors.New("invalid password")
@@ -17,12 +17,17 @@ type UserServiceInterface interface {
 	Login(ctx context.Context, login, password string) (token string, err error)
 }
 
+type userRepository interface {
+	CreateUser(ctx context.Context, login, passwordHash string) (string, error)
+	GetUserByLogin(ctx context.Context, login string) (*model.User, error)
+}
+
 type UserService struct {
-	repo       storage.Repository
+	repo       userRepository
 	jwtService *JWTService
 }
 
-func NewUserService(repo storage.Repository, jwtService *JWTService) *UserService {
+func NewUserService(repo userRepository, jwtService *JWTService) *UserService {
 	return &UserService{
 		repo:       repo,
 		jwtService: jwtService,

@@ -17,11 +17,17 @@ type BalanceServiceInterface interface {
 	GetWithdrawals(ctx context.Context, userID string) ([]model.Withdrawal, error)
 }
 
-type BalanceService struct {
-	repo storage.Repository
+type balanceRepository interface {
+	GetBalance(ctx context.Context, userID string) (current int64, withdrawn int64, err error)
+	CreateWithdrawal(ctx context.Context, userID, orderNumber string, sum int64) error
+	GetWithdrawalsByUserID(ctx context.Context, userID string) ([]model.Withdrawal, error)
 }
 
-func NewBalanceService(repo storage.Repository) *BalanceService {
+type BalanceService struct {
+	repo balanceRepository
+}
+
+func NewBalanceService(repo balanceRepository) *BalanceService {
 	return &BalanceService{repo: repo}
 }
 

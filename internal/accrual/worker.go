@@ -9,7 +9,6 @@ import (
 
 	"github.com/ustasjs/gopher-markt/internal/logger"
 	"github.com/ustasjs/gopher-markt/internal/money"
-	"github.com/ustasjs/gopher-markt/internal/storage"
 )
 
 const (
@@ -21,12 +20,17 @@ const (
 	statusInvalid    = "INVALID"
 )
 
+type orderRepository interface {
+	GetPendingOrders(ctx context.Context, limit int) ([]string, error)
+	UpdateOrderStatus(ctx context.Context, number, status string, accrual *int64) error
+}
+
 type Worker struct {
-	repo   storage.Repository
+	repo   orderRepository
 	client *Client
 }
 
-func NewWorker(repo storage.Repository, client *Client) *Worker {
+func NewWorker(repo orderRepository, client *Client) *Worker {
 	return &Worker{repo: repo, client: client}
 }
 

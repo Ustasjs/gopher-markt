@@ -8,8 +8,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/ustasjs/gopher-markt/internal/model"
 )
 
 type mockRepo struct {
@@ -22,28 +20,6 @@ func (m *mockRepo) GetPendingOrders(ctx context.Context, limit int) ([]string, e
 }
 func (m *mockRepo) UpdateOrderStatus(ctx context.Context, number, status string, accrual *int64) error {
 	return m.updateOrderStatusFn(ctx, number, status, accrual)
-}
-func (m *mockRepo) CreateUser(ctx context.Context, login, passwordHash string) (string, error) {
-	return "", nil
-}
-func (m *mockRepo) GetUserByLogin(ctx context.Context, login string) (*model.User, error) {
-	return nil, nil
-}
-func (m *mockRepo) CreateOrder(ctx context.Context, userID, number string) error { return nil }
-func (m *mockRepo) GetOrderByNumber(ctx context.Context, number string) (*model.Order, error) {
-	return nil, nil
-}
-func (m *mockRepo) GetOrdersByUserID(ctx context.Context, userID string) ([]model.Order, error) {
-	return nil, nil
-}
-func (m *mockRepo) GetBalance(ctx context.Context, userID string) (int64, int64, error) {
-	return 0, 0, nil
-}
-func (m *mockRepo) CreateWithdrawal(ctx context.Context, userID, orderNumber string, sum int64) error {
-	return nil
-}
-func (m *mockRepo) GetWithdrawalsByUserID(ctx context.Context, userID string) ([]model.Withdrawal, error) {
-	return nil, nil
 }
 
 func TestMapStatus(t *testing.T) {
