@@ -60,7 +60,7 @@ func (w *Worker) processBatch(ctx context.Context) {
 			return
 		}
 
-		resp, status, retryAfter, err := w.client.GetOrder(ctx, number)
+		resp, status, err := w.client.GetOrder(ctx, number)
 		if err != nil {
 			logger.Log.Error("accrual worker: get order", zap.String("number", number), zap.Error(err))
 			continue
@@ -73,14 +73,6 @@ func (w *Worker) processBatch(ctx context.Context) {
 			}
 		case http.StatusNoContent:
 			// заказ не зарегистрирован в accrual — оставляем NEW
-		case http.StatusTooManyRequests:
-			logger.Log.Info("accrual worker: rate limited", zap.Duration("retry_after", retryAfter))
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(retryAfter):
-			}
-			return // прерываем батч, следующий тик заберёт заказы заново
 		default:
 			logger.Log.Error("accrual worker: unexpected status",
 				zap.String("number", number),

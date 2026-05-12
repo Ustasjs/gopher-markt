@@ -148,11 +148,10 @@ func TestProcessBatch_NoContent_NoUpdate(t *testing.T) {
 	worker.processBatch(context.Background())
 }
 
-func TestProcessBatch_RateLimit_StopsBatch(t *testing.T) {
+func TestProcessBatch_RateLimited_LogsAndContinues(t *testing.T) {
 	var requestCount int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&requestCount, 1)
-		w.Header().Set("Retry-After", "60")
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer server.Close()
@@ -162,22 +161,20 @@ func TestProcessBatch_RateLimit_StopsBatch(t *testing.T) {
 			return []string{"111", "222", "333"}, nil
 		},
 		updateOrderStatusFn: func(ctx context.Context, number, status string, accrual *int64) error {
-			t.Error("UpdateOrderStatus should not be called after 429")
+			t.Error("UpdateOrderStatus should not be called when accrual rate limits")
 			return nil
 		},
 	}
 
-	worker := NewWorker(repo, NewClient(server.URL))
+	client := &Client{
+		baseURL:    server.URL,
+		httpClient: newRetryingDoer(&http.Client{Timeout: 5 * time.Second}, retryAttempts, time.Millisecond),
+	}
+	worker := NewWorker(repo, client)
+	worker.processBatch(context.Background())
 
-	// Контекст с таймаутом — разблокирует select после 429
-	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-	defer cancel()
-
-	worker.processBatch(ctx)
-
-	// Должен отправить ровно 1 запрос и остановиться
-	if got := atomic.LoadInt32(&requestCount); got != 1 {
-		t.Errorf("expected 1 request before rate limit stop, got %d", got)
+	if got, want := atomic.LoadInt32(&requestCount), int32(3*retryAttempts); got != want {
+		t.Errorf("server calls = %d, want %d", got, want)
 	}
 }
 
